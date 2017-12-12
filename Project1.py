@@ -42,13 +42,14 @@ def main(f):
 if __name__ == "__main__":
     # test the code
     # print list of words
-    url = sys.argv[1]
-    main(url)
-    print(url)
     f = "https://icarus.cs.weber.edu/~hvalle/hafb/wasteland.txt"
-    f = "http://kabaju.net/helena.html"
+    #f = "http://kabaju.net/helena.html"
 
-    #print(story_words)
+#    url = sys.argv[1]
+    main(f)
+    print(f)
+
+#    print(story_words)
 
 
 
