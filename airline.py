@@ -1,23 +1,36 @@
 """
-Model for aircraft flights
+Model for aircraft fligths
 """
+
+from pprint import pprint as pp
+
+
 
 class Flight:
     def __init__(self, number, aircraft):
-        if len(number) != 5:
-            print('wrong length')
-            raise ValueError
-        if not str.isalpha(number[:2]):
-            print('not alpha')
-            raise ValueError
-        if not str.isupper(number[:2]):
-            print('not upper')
-            raise ValueError
-        if not str.isnumeric(number[2:]):
-            print('not number')
-            raise ValueError
+        # 1) Pos 0-1 Must be alpha and Capital Letters
+        if not number[:2].isalpha():
+            raise ValueError("No airline code in '{}'".format(number))
+        if not number[:2].isupper():
+            raise ValueError("Invalid airline code in '{}'".format(number))
+        # 2) Pos 2-5 Must be digits and 0 < int <= 999
+        if not(number[2:].isdigit() and int(number[2:]) <= 999):
+            raise ValueError("Invalid route number '{}'".format(number))
+
         self._number = number
         self._aircraft = aircraft
+
+        rows, seats = self._aircraft.seating_plan()
+        # List of Dictionaries
+        # Waste one entry to match the actual number from the map
+        # To the single element list, concatenate another list containing
+        #   one entry for each row in the aircraft. Done by the list
+        #   comprehension from the list of rows retrieve from the seating plan
+        # Discard the row number (_) since you already have it from before
+        # The item form the comprehension is itself a dictionary comprehension
+        # Use the list comprehension because we want a distinct object for each row
+
+        self._seating = [None] + [{letter:None for letter in seats} for _ in rows]
 
     def number(self):
         return self._number
@@ -26,20 +39,97 @@ class Flight:
         return self._number[:2]
 
     def aircraft_model(self):
-        return self._aircraft.model
+        return self._aircraft.model()
+
+    def _parse_seat(self, seat):
+        """
+        Parse a seat designator into a valid row and letter
+        :param seat: A seat designator such as '12A'
+        :return: Tuple with an integer and a string for row and seat
+        """
+
+        row_number, seat_letter = self._aircraft.seating_plan()
+        # Validate letter
+        letter = seat[-1]
+        if letter not in seat_letter:
+            raise ValueError("Invalid seat letter{}".format(letter))
+        # validate row format
+        row_text = seat[:-1]
+        try:
+            row = int(row_text)
+        except ValueError:
+            raise ValueError("Invalid seat row{}".format(row_text))
+        # Valid row?
+        if row not in row_number:
+            raise ValueError("Invalid row number{}".format(row))
+        return row, letter
+
+    def allocate_seats(self, seat, passenger):
+        """
+        Allocate a seat to a passenger
+        :param seat: A seat designator such '12A', '21F'
+        :param passenger: The passenger name
+        :raises: ValueError: if the seat is unavailable
+        """
+        row, letter = self._parse_seat(seat)
+        # Check if it is available
+        if self._seating[row][letter] is not None:
+            raise ValueError("Seat {} is already occupied".format(seat))
+        # Assign seat
+        self._seating[row][letter] = passenger
+
+    def reallocate_pasengers(self, from_seat, to_seat):
+        """
+        Reallocate a passenger seat to a different seat
+        :param from_seat: Existing Seat designator
+        :param to_seat: New Seat designator
+        :return: Nothing
+        :raises: ValueError on: Seat already occupied, or
+                No passenger to reallocate.
+        """
+        from_row, from_letter = self._parse_seat(from_seat)
+        if self._seating[from_row][from_letter] is None:
+            raise ValueError("No passenger to reallocate in seat{}".format(
+                from_seat))
+
+        to_row, to_letter = self._parse_seat(to_seat)
+        if self._seating[to_row][to_letter] is not None:
+            raise ValueError("Seat {} already occupied".format(to_seat))
+        # Assign new seat and clear old seat
+        self._seating[to_row][to_letter] = self._seating[from_row][from_letter]
+        self._seating[from_row][from_letter] = None
+
+    def num_available_seats(self):
+        """
+        Returns available seats
+        :return: Available seats
+        """
+        return sum(sum(1 for s in row.values() if s is None)
+                for row in self._seating if row is not None)
+
+    def make_boarding_cards(self, card_printer):
+        for passenger, seat in sorted(self._passenger_seats()):
+            card_printer(passenger, seat, self.number(), self.aircraft_model())
+
+    def _passenger_seats(self):
+        """
+        An immutable series of passengers seating allocations
+        :return:
+        """
+        row_numbers, seat_letters = self._aircraft.seating_plan()
+        for row in row_numbers:
+            for letter in seat_letters:
+                passenger = self._seating[row][letter]
+                if passenger is not None:
+                    yield (passenger, "{}{}", format(row, letter))
+
 
 
 class Aircraft:
-    """
-
-    """
     def __init__(self, registration, model, num_rows, num_seats_per_row):
-        if num_seats_per_row > 10 :
-            raise ValueError ("Invalid seating setup")
         self._registration = registration
         self._model = model
         self._num_rows = num_rows
-        self._num_seats = num_rows * num_seats_per_row
         self._num_seats_per_row = num_seats_per_row
 
     def registration(self):
@@ -48,34 +138,91 @@ class Aircraft:
     def model(self):
         return self._model
 
-    #Seating plan: "ABCDEFGHJK"
     def seating_plan(self):
         """
-        Produces an iterable sequence of row number up to the number of rows in the plane.
-        The string and its lice method return a strign witone character per row.
-        These two objects the range, and the string are bundled into a tuple.
+        Produces an iterable sequence of row numbers up to
+        the number of rows in the plane.
+        The string and its slice method return a string with
+        one character per row.
+        These two objects the range, and the string are bundle
+        into a tuple.
         :return:
         """
-        return (range(1, self._num_rows+1),
+        return (range(1, self._num_rows + 1),
                 "ABCDEFGHJK"[:self._num_seats_per_row])
+
+class AirbusA319:
+    def __init__(self, registration):
+        self._registration = registration
+
+    def registrtation(self):
+        return self._registration
+
+    def model(self):
+        return "Airbus 319"
+
+    def seating_plan:
+        return range(1, 23), "ABCDEF"
+
+
+class Boeing777:
+    def __init__(self, registration):
+        self._registration = registration
+
+    def registrtation(self):
+        return self._registration
+
+    def model(self):
+        return "Boeing 777"
+
+    def seating_plan:
+        return range(1, 56), "ABCDEFGHJ"
+
+
+def make_flights():
+    a = Aircraft("G-EUPT", "AirBus A319", num_rows=22,
+                  num_seats_per_row=6)
+    #f = Flight("AA777", a)
+    f = Flight("AAA777", AirbusA319("G-EUPT"))
+    f.allocate_seats("12A", "Guido van Rossum")     # python
+    f.allocate_seats("12B", "Rasmus Lerdorf")       # php
+    f.allocate_seats("15F", "Bjarne Stroustrup")    # c++
+    g = Flight()
+    g.allocate_seats("15E", "Anders Hejlsberg")     # Turbo Pascal
+    #f.allocate_seats("E27", "Yukihiro Matsumoto")   # Ruby
+    g.allocate_seats("22E", "Yukihiro Matsumoto")   # Ruby
+
+    return f, g
+
+
+def console_card_printer(passenger, seat, flight_number, aircraft):
+    output = "| Name: {0}"\
+             "  Flight: {1}"\
+             "  Seat: {2}"\
+             "  Aircraft: {3}"\
+            " |".format(passenger, flight_number, seat, aircraft)
+
+    banner = "+" + "-"*(len(output)-2) + "+"
+    border = "|" + " "*(len(output)-2) + "|"
+    lines = [banner, border, output, border, banner]
+    card = '\n'.join(lines)
+    # print("x" * len(output))
+    # print(output)
+    # print("x" * len(output))
+    print(card)
 
 
 def main():
-    """
-    Test Function
-    :return:
-    """
-    # f = Flight ("AA123")
-    # print(f.number())
-    # print(f.airline())
-    #
-    a = Aircraft('FCC', 'hopper', num_rows=22, num_seats_per_row=6)
-    # print(a.registration())
-    # print(a.model())
-    # print(a.seating_plan())
+    f1, g1 = make_flights()
+    # pp(f1._seating)
+    # f1.reallocate_pasengers("22E", "12C")
+    # pp(f1._seating)
+    print(f1.num_available_seats())
 
-    f = Flight("AA777", a)
-    print(f.aircraft_model())
+    # console_card_printer("Guido", "12A", "AA123", "Airbus 319")
+    f1.make_boarding_cards(console_card_printer)
+
 
 if __name__ == '__main__':
     main()
+    exit(0)
